@@ -23,7 +23,14 @@ import {
 } from "@/lib/product-builder-data";
 import { cn, makeHandle, normalizeSku } from "@/lib/utils";
 
-const steps = ["BASICS", "VARIANTS", "INVENTORY", "IMAGES", "SEO", "REVIEW"];
+const steps = [
+  "BASICS",
+  "VARIANTS",
+  "INVENTORY",
+  //  "IMAGES",
+  "SEO",
+  "REVIEW",
+];
 
 export function ProductBuilder({
   initialData,
@@ -286,11 +293,6 @@ export function ProductBuilder({
                   onChange={(value) => updateField("title", value)}
                 />
                 <TextField
-                  label="BRAND"
-                  value={product.vendor}
-                  onChange={(value) => updateField("vendor", value)}
-                />
-                <TextField
                   label="PRODUCT TYPE"
                   value={product.productType}
                   onChange={(value) => updateField("productType", value)}
@@ -370,7 +372,7 @@ export function ProductBuilder({
             </BuilderSection>
           )}
 
-          {step === 3 && (
+          {/* {step === 3 && (
             <BuilderSection title="Product Imagery">
               <label className="flex min-h-72 cursor-pointer flex-col items-center justify-center border border-dashed border-[#cfc5b7] bg-[#fffdf8]/54 p-8 text-center transition hover:bg-[#eee7db]">
                 <ImagePlus className="h-9 w-9 text-[#746d64]" />
@@ -453,9 +455,9 @@ export function ProductBuilder({
                 ))}
               </div>
             </BuilderSection>
-          )}
+          )} */}
 
-          {step === 4 && (
+          {step === 3 && (
             <BuilderSection title="SEO">
               <TextField
                 label={`SEO TITLE ${product.seoTitle.length}/70`}
@@ -484,7 +486,7 @@ export function ProductBuilder({
             </BuilderSection>
           )}
 
-          {step === 5 && (
+          {step === 4 && (
             <BuilderSection title="Review & Submit">
               <ChipEditor
                 label="TAGS"
