@@ -1,11 +1,9 @@
 import Link from "next/link";
-import { LogOut, Package, PanelsTopLeft, Settings, Sparkles } from "lucide-react";
+import { LogOut, Package, PanelsTopLeft, Settings } from "lucide-react";
 
 const nav = [
   { label: "HOME", href: "/dashboard", icon: PanelsTopLeft },
   { label: "PRODUCTS", href: "/products", icon: Package },
-  { label: "TEMPLATES", href: "/templates", icon: Sparkles },
-  { label: "REVIEWS", href: "/reviews", icon: PanelsTopLeft }
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -33,7 +31,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           ))}
         </nav>
         <div className="mt-auto space-y-2">
-          <Link className="flex items-center gap-3 px-2 py-2 text-[0.72rem] font-semibold tracking-[0.14em] text-[#62594f]" href="/settings">
+          <Link
+            className="flex items-center gap-3 px-2 py-2 text-[0.72rem] font-semibold tracking-[0.14em] text-[#62594f]"
+            href="/settings"
+          >
             <Settings className="h-4 w-4" />
             SETTINGS
           </Link>
@@ -47,10 +48,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
       <header className="sticky top-0 z-20 border-b border-[#ded6ca] bg-[#f7f3ec]/92 px-5 py-4 backdrop-blur lg:hidden">
         <div className="flex items-center justify-between">
-          <Link href="/dashboard" className="text-sm font-semibold tracking-[0.16em]">
+          <Link
+            href="/dashboard"
+            className="text-sm font-semibold tracking-[0.16em]"
+          >
             STUDIO PRODUCTS
           </Link>
-          <Link href="/products/new" className="text-xs font-semibold tracking-[0.12em]">
+          <Link
+            href="/products/new"
+            className="text-xs font-semibold tracking-[0.12em]"
+          >
             NEW
           </Link>
         </div>
