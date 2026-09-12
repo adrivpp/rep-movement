@@ -21,7 +21,7 @@ import {
   type ProductImage,
   type Variant,
 } from "@/lib/product-builder-data";
-import { makeHandle, normalizeSku } from "@/lib/utils";
+import { cn, makeHandle, normalizeSku } from "@/lib/utils";
 
 const steps = ["BASICS", "VARIANTS", "INVENTORY", "IMAGES", "SEO", "REVIEW"];
 
@@ -790,61 +790,84 @@ function VariantRows({
   compact?: boolean;
   onChange: (id: string, field: keyof Variant, value: string) => void;
 }) {
+  if (variants.length === 0) {
+    return (
+      <div className="py-8 text-center text-sm text-[#746d64] border-y border-[#ded6ca]">
+        No variants generated yet. Add colors and sizes above.
+      </div>
+    );
+  }
+
   return (
-    <div className="divide-y divide-[#ded6ca] border-y border-[#ded6ca]">
-      {variants.map((variant) => (
-        <div
-          key={variant.id}
-          className="grid gap-5 py-6 xl:grid-cols-[1.1fr_1.2fr_0.8fr_0.8fr_0.7fr_0.7fr_1fr] xl:items-end"
-        >
-          <div>
-            <p className="text-xl font-medium">
-              {variant.color} / {variant.size}
-            </p>
-            <p className="mt-1 text-sm text-[#746d64]">{variant.sku}</p>
+    <div className={compact ? "" : "overflow-x-auto pb-2"}>
+      <div
+        className={
+          compact
+            ? "divide-y divide-[#ded6ca] border-y border-[#ded6ca]"
+            : "min-w-[960px] divide-y divide-[#ded6ca] border-y border-[#ded6ca]"
+        }
+      >
+        {variants.map((variant) => (
+          <div
+            key={variant.id}
+            className={
+              compact
+                ? "grid gap-4 py-5 sm:grid-cols-[200px_1fr] sm:items-end"
+                : "grid gap-4 py-5 grid-cols-[160px_1.8fr_0.85fr_0.85fr_0.75fr_0.75fr_1.1fr] items-end"
+            }
+          >
+            <div className="min-w-0">
+              <p className="text-xl font-medium truncate">
+                {variant.color} / {variant.size}
+              </p>
+              <p className="mt-1 text-sm text-[#746d64] truncate">
+                {variant.sku}
+              </p>
+            </div>
+            <InlineInput
+              label="SKU"
+              value={variant.sku}
+              className="min-w-[180px]"
+              onChange={(value) => onChange(variant.id, "sku", value)}
+            />
+            {!compact && (
+              <>
+                <InlineInput
+                  label="PRICE"
+                  type="number"
+                  value={variant.price}
+                  onChange={(value) => onChange(variant.id, "price", value)}
+                />
+                <InlineInput
+                  label="COMPARE"
+                  type="number"
+                  value={variant.compareAtPrice}
+                  onChange={(value) =>
+                    onChange(variant.id, "compareAtPrice", value)
+                  }
+                />
+                <InlineInput
+                  label="STOCK"
+                  type="number"
+                  value={variant.stock}
+                  onChange={(value) => onChange(variant.id, "stock", value)}
+                />
+                <InlineInput
+                  label="WEIGHT"
+                  type="number"
+                  value={variant.weight}
+                  onChange={(value) => onChange(variant.id, "weight", value)}
+                />
+                <InlineInput
+                  label="BARCODE"
+                  value={variant.barcode}
+                  onChange={(value) => onChange(variant.id, "barcode", value)}
+                />
+              </>
+            )}
           </div>
-          <InlineInput
-            label="SKU"
-            value={variant.sku}
-            onChange={(value) => onChange(variant.id, "sku", value)}
-          />
-          {!compact && (
-            <>
-              <InlineInput
-                label="PRICE"
-                type="number"
-                value={variant.price}
-                onChange={(value) => onChange(variant.id, "price", value)}
-              />
-              <InlineInput
-                label="COMPARE"
-                type="number"
-                value={variant.compareAtPrice}
-                onChange={(value) =>
-                  onChange(variant.id, "compareAtPrice", value)
-                }
-              />
-              <InlineInput
-                label="STOCK"
-                type="number"
-                value={variant.stock}
-                onChange={(value) => onChange(variant.id, "stock", value)}
-              />
-              <InlineInput
-                label="WEIGHT"
-                type="number"
-                value={variant.weight}
-                onChange={(value) => onChange(variant.id, "weight", value)}
-              />
-              <InlineInput
-                label="BARCODE"
-                value={variant.barcode}
-                onChange={(value) => onChange(variant.id, "barcode", value)}
-              />
-            </>
-          )}
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
@@ -853,18 +876,20 @@ function InlineInput({
   label,
   value,
   type = "text",
+  className,
   onChange,
 }: {
   label: string;
   value: string;
   type?: string;
+  className?: string;
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="block">
+    <label className={cn("block min-w-0", className)}>
       <span className="micro-label">{label}</span>
       <input
-        className="field mt-1 py-2 text-sm"
+        className="field mt-1 py-2 text-sm w-full"
         type={type}
         value={value}
         min={type === "number" ? "0" : undefined}

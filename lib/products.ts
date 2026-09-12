@@ -1,5 +1,7 @@
-import { demoProducts } from "@/data/demo";
-import { demoBuilderData, type ProductBuilderInitialData } from "@/lib/product-builder-data";
+import {
+  demoBuilderData,
+  type ProductBuilderInitialData,
+} from "@/lib/product-builder-data";
 import { createClient, hasSupabaseEnv } from "@/lib/supabase/server";
 
 export type ProductSummary = {
@@ -16,13 +18,9 @@ const fallbackImage =
   "https://images.unsplash.com/photo-1593810450967-f9c42742e326?auto=format&fit=crop&w=600&q=80";
 
 export async function getProductSummaries(): Promise<ProductSummary[]> {
-  if (!hasSupabaseEnv()) {
-    return demoProducts;
-  }
-
   const supabase = await createClient();
   const {
-    data: { user }
+    data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) {
@@ -32,7 +30,7 @@ export async function getProductSummaries(): Promise<ProductSummary[]> {
   const { data, error } = await supabase
     .from("products")
     .select(
-      "id,title,status,completion_percentage,updated_at,product_variants(color,size),product_images(url,position)"
+      "id,title,status,completion_percentage,updated_at,product_variants(color,size),product_images(url,position)",
     )
     .order("updated_at", { ascending: false })
     .limit(25);
@@ -43,10 +41,14 @@ export async function getProductSummaries(): Promise<ProductSummary[]> {
 
   return data.map((product) => {
     const variants = product.product_variants ?? [];
-    const colors = Array.from(new Set(variants.map((variant) => variant.color).filter(Boolean)));
-    const sizes = Array.from(new Set(variants.map((variant) => variant.size).filter(Boolean)));
+    const colors = Array.from(
+      new Set(variants.map((variant) => variant.color).filter(Boolean)),
+    );
+    const sizes = Array.from(
+      new Set(variants.map((variant) => variant.size).filter(Boolean)),
+    );
     const images = [...(product.product_images ?? [])].sort(
-      (a, b) => (a.position ?? 0) - (b.position ?? 0)
+      (a, b) => (a.position ?? 0) - (b.position ?? 0),
     );
 
     return {
@@ -57,30 +59,21 @@ export async function getProductSummaries(): Promise<ProductSummary[]> {
       completion: product.completion_percentage ?? 0,
       updatedAt: new Intl.DateTimeFormat("en", {
         month: "short",
-        day: "numeric"
+        day: "numeric",
       }).format(new Date(product.updated_at)),
-      image: images[0]?.url ?? fallbackImage
+      image: images[0]?.url ?? fallbackImage,
     };
   });
 }
 
-export async function getProductForEdit(id: string): Promise<ProductBuilderInitialData | null> {
-  if (!hasSupabaseEnv()) {
-    if (id === demoBuilderData.id || demoProducts.some((product) => product.id === id)) {
-      return {
-        ...demoBuilderData,
-        id
-      };
-    }
-
-    return null;
-  }
-
+export async function getProductForEdit(
+  id: string,
+): Promise<ProductBuilderInitialData | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("products")
     .select(
-      "id,title,handle,vendor,product_type,description,short_description,seo_title,seo_description,product_variants(id,sku,price,compare_at_price,cost,stock,weight,barcode,color,size),product_images(id,url,alt_text,position),product_tags(tag),product_metafields(namespace,key,value,type)"
+      "id,title,handle,vendor,product_type,description,short_description,seo_title,seo_description,product_variants(id,sku,price,compare_at_price,cost,stock,weight,barcode,color,size),product_images(id,url,alt_text,position),product_tags(tag),product_metafields(namespace,key,value,type)",
     )
     .eq("id", id)
     .single();
@@ -90,8 +83,12 @@ export async function getProductForEdit(id: string): Promise<ProductBuilderIniti
   }
 
   const variants = data.product_variants ?? [];
-  const colors = Array.from(new Set(variants.map((variant) => variant.color).filter(Boolean)));
-  const sizes = Array.from(new Set(variants.map((variant) => variant.size).filter(Boolean)));
+  const colors = Array.from(
+    new Set(variants.map((variant) => variant.color).filter(Boolean)),
+  );
+  const sizes = Array.from(
+    new Set(variants.map((variant) => variant.size).filter(Boolean)),
+  );
 
   return {
     id: data.id,
@@ -112,8 +109,8 @@ export async function getProductForEdit(id: string): Promise<ProductBuilderIniti
         namespace: field.namespace,
         key: field.key,
         value: field.value,
-        type: field.type
-      }))
+        type: field.type,
+      })),
     },
     variants: variants.map((variant) => ({
       id: variant.id,
@@ -125,7 +122,7 @@ export async function getProductForEdit(id: string): Promise<ProductBuilderIniti
       cost: String(variant.cost ?? ""),
       stock: String(variant.stock ?? "0"),
       weight: String(variant.weight ?? ""),
-      barcode: variant.barcode ?? ""
+      barcode: variant.barcode ?? "",
     })),
     images: [...(data.product_images ?? [])]
       .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
@@ -133,7 +130,7 @@ export async function getProductForEdit(id: string): Promise<ProductBuilderIniti
         id: image.id,
         url: image.url,
         name: image.url.split("/").at(-1) ?? "Product image",
-        alt: image.alt_text ?? ""
-      }))
+        alt: image.alt_text ?? "",
+      })),
   };
 }
