@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Package, Plus } from "lucide-react";
+import { ImagePlus, Package, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status";
 import { getProductSummaries } from "@/lib/products";
@@ -53,13 +53,19 @@ export default async function ProductsPage() {
               href={`/products/${product.id}`}
               className="grid gap-5 py-7 transition hover:bg-[#eee7db]/40 md:grid-cols-[112px_1fr_160px_160px_120px] md:items-center"
             >
-              <Image
-                src={product.image}
-                alt=""
-                width={160}
-                height={160}
-                className="aspect-[4/5] w-full rounded-md object-cover md:w-28"
-              />
+              {product.image ? (
+                <Image
+                  src={product.image}
+                  alt=""
+                  width={160}
+                  height={160}
+                  className="aspect-[4/5] w-full rounded-md object-cover md:w-28"
+                />
+              ) : (
+                <div className="flex aspect-[4/5] w-full items-center justify-center rounded-md bg-[#e7dfd4] text-[#746d64] md:w-28">
+                  <ImagePlus className="h-6 w-6" />
+                </div>
+              )}
               <div>
                 <h2 className="text-2xl font-medium">{product.title}</h2>
                 <p className="mt-1 text-sm text-[#746d64]">{product.color}</p>

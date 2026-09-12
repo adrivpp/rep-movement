@@ -1,8 +1,5 @@
-import {
-  demoBuilderData,
-  type ProductBuilderInitialData,
-} from "@/lib/product-builder-data";
-import { createClient, hasSupabaseEnv } from "@/lib/supabase/server";
+import { type ProductBuilderInitialData } from "@/lib/product-builder-data";
+import { createClient } from "@/lib/supabase/server";
 
 export type ProductSummary = {
   id: string;
@@ -11,11 +8,8 @@ export type ProductSummary = {
   status: string;
   completion: number;
   updatedAt: string;
-  image: string;
+  image: string | null;
 };
-
-const fallbackImage =
-  "https://images.unsplash.com/photo-1593810450967-f9c42742e326?auto=format&fit=crop&w=600&q=80";
 
 export async function getProductSummaries(): Promise<ProductSummary[]> {
   const supabase = await createClient();
@@ -61,7 +55,7 @@ export async function getProductSummaries(): Promise<ProductSummary[]> {
         month: "short",
         day: "numeric",
       }).format(new Date(product.updated_at)),
-      image: images[0]?.url ?? fallbackImage,
+      image: images[0]?.url ?? null,
     };
   });
 }
