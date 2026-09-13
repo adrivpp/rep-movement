@@ -20,6 +20,40 @@ export type ProductImage = {
   alt: string;
 };
 
+export type ProductSpecs = {
+  fabric: string;
+  composition: string;
+  fit: string;
+  compression: string;
+  stretch: string;
+  support: string;
+  rise: string;
+  length: string;
+  activity: string;
+  modelHeight: string;
+  modelSize: string;
+  careInstructions: string;
+  countryOfOrigin: string;
+};
+
+export type ColorwayDetails = {
+  status:
+    | "coming_soon"
+    | "available"
+    | "low_stock"
+    | "sold_out"
+    | "preorder"
+    | "restocked"
+    | "archived";
+  isPermanent: boolean;
+  isLimited: boolean;
+  preorderEnabled: boolean;
+  preorderStart: string;
+  preorderEnd: string;
+  preorderShippingEstimate: string;
+  preorderMessage: string;
+};
+
 export type ProductFormState = {
   title: string;
   vendor: string;
@@ -29,6 +63,8 @@ export type ProductFormState = {
   description: string;
   seoTitle: string;
   seoDescription: string;
+  specs: ProductSpecs;
+  colorwayDetails: Record<string, ColorwayDetails>;
   colors: string[];
   sizes: string[];
   skuPrefix: string;
@@ -50,23 +86,50 @@ export type ProductBuilderInitialData = {
 
 export const blankProductState: ProductFormState = {
   title: "",
-  vendor: "",
+  vendor: "REP.MOVEMENT",
   productType: "",
   handle: "",
   shortDescription: "",
   description: "",
   seoTitle: "",
   seoDescription: "",
+  specs: {
+    fabric: "",
+    composition: "",
+    fit: "",
+    compression: "",
+    stretch: "",
+    support: "",
+    rise: "",
+    length: "",
+    activity: "",
+    modelHeight: "",
+    modelSize: "",
+    careInstructions: "",
+    countryOfOrigin: "",
+  },
+  colorwayDetails: {},
   colors: [],
   sizes: [],
   skuPrefix: "",
   tags: [],
-  metafields: []
+  metafields: [],
 };
 
-export function generateVariants(colors: string[], sizes: string[], prefix: string): Variant[] {
-  return colors.flatMap((color) =>
-    sizes.map((size) => ({
+export function generateVariants(
+  colors: string[],
+  sizes: string[],
+  prefix: string,
+): Variant[] {
+  const uniqueColors = Array.from(
+    new Set(colors.map((color) => color.trim()).filter(Boolean)),
+  );
+  const uniqueSizes = Array.from(
+    new Set(sizes.map((size) => size.trim().toUpperCase()).filter(Boolean)),
+  );
+
+  return uniqueColors.flatMap((color) =>
+    uniqueSizes.map((size) => ({
       id: `${color}-${size}`,
       color,
       size,
@@ -76,9 +139,38 @@ export function generateVariants(colors: string[], sizes: string[], prefix: stri
       cost: "",
       stock: "0",
       weight: "",
-      barcode: ""
-    }))
+      barcode: "",
+    })),
   );
+}
+
+export function mergeVariants(
+  existing: Variant[],
+  colors: string[],
+  sizes: string[],
+  prefix: string,
+): Variant[] {
+  const existingByCombination = new Map(
+    existing.map((variant) => [
+      `${variant.color.toLowerCase()}::${variant.size.toLowerCase()}`,
+      variant,
+    ]),
+  );
+
+  return generateVariants(colors, sizes, prefix).map((generated) => {
+    const existingVariant = existingByCombination.get(
+      `${generated.color.toLowerCase()}::${generated.size.toLowerCase()}`,
+    );
+
+    return existingVariant
+      ? {
+          ...generated,
+          ...existingVariant,
+          color: generated.color,
+          size: generated.size,
+        }
+      : generated;
+  });
 }
 
 export const demoBuilderData: ProductBuilderInitialData = {
@@ -88,11 +180,50 @@ export const demoBuilderData: ProductBuilderInitialData = {
     vendor: "REP",
     productType: "Leggings",
     handle: "contour-legging",
-    shortDescription: "High-waisted contour leggings designed for studio days and slow mornings.",
+    shortDescription:
+      "High-waisted contour leggings designed for studio days and slow mornings.",
     description:
       "A sculpting, soft-touch legging with a second-skin feel, subtle compression, and a clean high-rise waistband.",
     seoTitle: "Contour Legging | REP",
-    seoDescription: "High-waisted contour leggings designed for studio days, training sessions, and daily movement.",
+    seoDescription:
+      "High-waisted contour leggings designed for studio days, training sessions, and daily movement.",
+    specs: {
+      fabric: "Soft performance jersey",
+      composition: "78% Nylon, 22% Elastane",
+      fit: "Second-skin",
+      compression: "Medium",
+      stretch: "High",
+      support: "Medium",
+      rise: "High-rise",
+      length: "Full length",
+      activity: "Studio and everyday movement",
+      modelHeight: "5'9\"",
+      modelSize: "S",
+      careInstructions: "Machine wash cold with like colors. Hang dry.",
+      countryOfOrigin: "Made in Portugal",
+    },
+    colorwayDetails: {
+      Oat: {
+        status: "available",
+        isPermanent: true,
+        isLimited: false,
+        preorderEnabled: false,
+        preorderStart: "",
+        preorderEnd: "",
+        preorderShippingEstimate: "",
+        preorderMessage: "",
+      },
+      Black: {
+        status: "available",
+        isPermanent: true,
+        isLimited: false,
+        preorderEnabled: false,
+        preorderStart: "",
+        preorderEnd: "",
+        preorderShippingEstimate: "",
+        preorderMessage: "",
+      },
+    },
     colors: ["Oat", "Black"],
     sizes: ["XS", "S", "M", "L", "XL"],
     skuPrefix: "REP-CL",
@@ -102,19 +233,21 @@ export const demoBuilderData: ProductBuilderInitialData = {
         namespace: "custom",
         key: "fabric",
         value: "Soft performance jersey",
-        type: "single_line_text_field"
-      }
-    ]
+        type: "single_line_text_field",
+      },
+    ],
   },
-  variants: generateVariants(["Oat", "Black"], ["XS", "S", "M", "L", "XL"], "REP-CL").map(
-    (variant) => ({
-      ...variant,
-      price: "89",
-      compareAtPrice: "109",
-      cost: "32",
-      stock: "20",
-      weight: "0.4"
-    })
-  ),
-  images: []
+  variants: generateVariants(
+    ["Oat", "Black"],
+    ["XS", "S", "M", "L", "XL"],
+    "REP-CL",
+  ).map((variant) => ({
+    ...variant,
+    price: "89",
+    compareAtPrice: "109",
+    cost: "32",
+    stock: "20",
+    weight: "0.4",
+  })),
+  images: [],
 };

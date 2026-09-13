@@ -1,61 +1,91 @@
-create type public.app_role as enum ('admin', 'client');
-create type public.product_status as enum ('draft', 'in_progress', 'ready_to_submit', 'submitted', 'needs_changes', 'approved');
+create type public.app_role as enum ('admin', 'member');
+create type public.product_status as enum (
+  'draft', 'in_progress', 'ready_to_submit', 'submitted', 'needs_changes',
+  'approved', 'ready_for_shopify', 'exported', 'published'
+);
+create type public.colorway_status as enum (
+  'coming_soon', 'available', 'low_stock', 'sold_out', 'preorder', 'restocked', 'archived'
+);
+create type public.drop_status as enum ('draft', 'coming_soon', 'live', 'ended', 'archived');
 
 create table public.profiles (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null unique references auth.users(id) on delete cascade,
   full_name text,
   email text not null,
-  role public.app_role not null default 'client',
+  role public.app_role not null default 'member',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
-create table public.organizations (
+create table public.templates (
   id uuid primary key default gen_random_uuid(),
-  name text not null,
-  slug text not null unique,
+  name text not null unique,
+  description text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
-);
-
-create table public.organization_members (
-  id uuid primary key default gen_random_uuid(),
-  organization_id uuid not null references public.organizations(id) on delete cascade,
-  user_id uuid not null references auth.users(id) on delete cascade,
-  role public.app_role not null default 'client',
-  created_at timestamptz not null default now(),
-  unique (organization_id, user_id)
 );
 
 create table public.products (
   id uuid primary key default gen_random_uuid(),
-  organization_id uuid not null references public.organizations(id) on delete cascade,
   title text not null default '',
-  handle text not null default '',
-  vendor text,
+  handle text not null unique,
+  vendor text not null default 'REP.MOVEMENT',
   product_type text,
-  description text,
   short_description text,
+  description text,
   status public.product_status not null default 'draft',
   completion_percentage integer not null default 0 check (completion_percentage between 0 and 100),
   seo_title text,
   seo_description text,
+  template_id uuid references public.templates(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   submitted_at timestamptz,
-  unique (organization_id, handle)
+  approved_at timestamptz
+);
+
+create table public.colors (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  code text not null unique,
+  hex text,
+  swatch text,
+  color_family text,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table public.product_colorways (
+  id uuid primary key default gen_random_uuid(),
+  product_id uuid not null references public.products(id) on delete cascade,
+  color_id uuid references public.colors(id) on delete set null,
+  color_name_snapshot text not null,
+  status public.colorway_status not null default 'coming_soon',
+  is_permanent boolean not null default true,
+  is_limited boolean not null default false,
+  preorder_enabled boolean not null default false,
+  preorder_start timestamptz,
+  preorder_end timestamptz,
+  preorder_shipping_estimate text,
+  preorder_message text,
+  position integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (product_id, color_name_snapshot)
 );
 
 create table public.product_variants (
   id uuid primary key default gen_random_uuid(),
   product_id uuid not null references public.products(id) on delete cascade,
-  sku text not null,
-  price numeric(10,2) not null default 0,
-  compare_at_price numeric(10,2),
-  cost numeric(10,2),
+  colorway_id uuid references public.product_colorways(id) on delete cascade,
+  sku text not null unique,
+  price numeric(10,2) not null default 0 check (price >= 0),
+  compare_at_price numeric(10,2) check (compare_at_price >= 0),
+  cost numeric(10,2) check (cost >= 0),
   stock integer not null default 0 check (stock >= 0),
-  weight numeric(10,3),
+  weight numeric(10,3) check (weight >= 0),
   weight_unit text not null default 'kg',
   barcode text,
   color text,
@@ -64,27 +94,29 @@ create table public.product_variants (
   option_1_value text,
   option_2_name text,
   option_2_value text,
-  option_3_name text,
-  option_3_value text,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  unique (product_id, sku)
+  updated_at timestamptz not null default now()
 );
 
 create table public.product_images (
   id uuid primary key default gen_random_uuid(),
   product_id uuid not null references public.products(id) on delete cascade,
+  colorway_id uuid references public.product_colorways(id) on delete cascade,
   storage_path text not null,
   url text not null,
   alt_text text,
+  image_type text not null default 'other',
   position integer not null default 0,
-  created_at timestamptz not null default now()
+  is_primary boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 create table public.product_tags (
   id uuid primary key default gen_random_uuid(),
   product_id uuid not null references public.products(id) on delete cascade,
   tag text not null,
+  created_at timestamptz not null default now(),
   unique (product_id, tag)
 );
 
@@ -96,28 +128,71 @@ create table public.product_metafields (
   value text not null,
   type text not null default 'single_line_text_field',
   created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (product_id, namespace, key)
+);
+
+create table public.product_specs (
+  id uuid primary key default gen_random_uuid(),
+  product_id uuid not null unique references public.products(id) on delete cascade,
+  fabric text,
+  composition text,
+  fit text,
+  compression text,
+  stretch text,
+  support text,
+  rise text,
+  length text,
+  activity text,
+  model_height text,
+  model_size text,
+  care_instructions text,
+  country_of_origin text,
+  created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
-create table public.product_reviews (
+create table public.drops (
   id uuid primary key default gen_random_uuid(),
-  product_id uuid not null references public.products(id) on delete cascade,
-  admin_id uuid not null references auth.users(id),
-  comment text not null,
-  created_at timestamptz not null default now()
+  name text not null,
+  code text not null unique,
+  description text,
+  status public.drop_status not null default 'draft',
+  release_date date,
+  release_time time,
+  timezone text not null default 'America/New_York',
+  hero_image text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
-create table public.product_templates (
+create table public.drop_products (
   id uuid primary key default gen_random_uuid(),
-  organization_id uuid references public.organizations(id) on delete cascade,
-  name text not null,
-  description text,
+  drop_id uuid not null references public.drops(id) on delete cascade,
+  product_id uuid not null references public.products(id) on delete cascade,
+  position integer not null default 0,
+  unique (drop_id, product_id)
+);
+
+create table public.drop_colorways (
+  id uuid primary key default gen_random_uuid(),
+  drop_id uuid not null references public.drops(id) on delete cascade,
+  colorway_id uuid not null references public.product_colorways(id) on delete cascade,
+  position integer not null default 0,
+  unique (drop_id, colorway_id)
+);
+
+create table public.reviews (
+  id uuid primary key default gen_random_uuid(),
+  product_id uuid not null references public.products(id) on delete cascade,
+  comment text not null,
+  type text not null default 'general',
   created_at timestamptz not null default now()
 );
 
 create table public.template_fields (
   id uuid primary key default gen_random_uuid(),
-  template_id uuid not null references public.product_templates(id) on delete cascade,
+  template_id uuid not null references public.templates(id) on delete cascade,
   field_name text not null,
   field_label text not null,
   field_type text not null,
@@ -125,6 +200,16 @@ create table public.template_fields (
   help_text text,
   position integer not null default 0,
   options jsonb not null default '{}'::jsonb,
+  validation jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create table public.audit_logs (
+  id uuid primary key default gen_random_uuid(),
+  entity_type text not null,
+  entity_id uuid,
+  action text not null,
+  metadata jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()
 );
 
@@ -140,59 +225,15 @@ as $$
   );
 $$;
 
-create or replace function public.is_org_member(org_id uuid)
-returns boolean
-language sql
-security definer
-set search_path = public
-as $$
-  select exists (
-    select 1 from public.organization_members
-    where organization_id = org_id and user_id = auth.uid()
-  );
-$$;
-
-create or replace function public.slugify(value text)
-returns text
-language sql
-immutable
-as $$
-  select trim(both '-' from regexp_replace(lower(coalesce(value, 'workspace')), '[^a-z0-9]+', '-', 'g'));
-$$;
-
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
 security definer
 set search_path = public
 as $$
-declare
-  org_id uuid;
-  base_name text;
-  base_slug text;
 begin
-  base_name := coalesce(new.raw_user_meta_data->>'organization_name', split_part(new.email, '@', 1) || ' Studio');
-  base_slug := public.slugify(base_name) || '-' || substr(new.id::text, 1, 8);
-
-  insert into public.organizations (name, slug)
-  values (base_name, base_slug)
-  returning id into org_id;
-
-  insert into public.profiles (user_id, full_name, email, role)
-  values (
-    new.id,
-    coalesce(new.raw_user_meta_data->>'full_name', ''),
-    new.email,
-    coalesce((new.raw_user_meta_data->>'role')::public.app_role, 'client')
-  );
-
-  insert into public.organization_members (organization_id, user_id, role)
-  values (
-    org_id,
-    new.id,
-    coalesce((new.raw_user_meta_data->>'role')::public.app_role, 'client')
-  );
-
+  insert into public.profiles (user_id, full_name, email)
+  values (new.id, coalesce(new.raw_user_meta_data->>'full_name', ''), new.email);
   return new;
 end;
 $$;
@@ -201,48 +242,59 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
-alter table public.profiles enable row level security;
-alter table public.organizations enable row level security;
-alter table public.organization_members enable row level security;
-alter table public.products enable row level security;
-alter table public.product_variants enable row level security;
-alter table public.product_images enable row level security;
-alter table public.product_tags enable row level security;
-alter table public.product_metafields enable row level security;
-alter table public.product_reviews enable row level security;
-alter table public.product_templates enable row level security;
-alter table public.template_fields enable row level security;
+do $$
+declare table_name text;
+begin
+  foreach table_name in array array[
+    'profiles', 'templates', 'template_fields', 'products', 'colors',
+    'product_colorways', 'product_variants', 'product_images', 'product_tags',
+    'product_metafields', 'product_specs', 'drops', 'drop_products',
+    'drop_colorways', 'reviews', 'audit_logs'
+  ] loop
+    execute format('alter table public.%I enable row level security', table_name);
+    execute format(
+      'create policy "Authenticated users can read %1$s" on public.%1$I for select to authenticated using (true)',
+      table_name
+    );
+    execute format(
+      'create policy "Authenticated users can write %1$s" on public.%1$I for all to authenticated using (true) with check (true)',
+      table_name
+    );
+  end loop;
+end $$;
 
-create policy "Profiles are visible to owner or admins" on public.profiles for select using (user_id = auth.uid() or public.is_admin());
-create policy "Users update own profile" on public.profiles for update using (user_id = auth.uid());
-
-create policy "Organizations visible to members or admins" on public.organizations for select using (public.is_admin() or public.is_org_member(id));
-create policy "Admins manage organizations" on public.organizations for all using (public.is_admin()) with check (public.is_admin());
-
-create policy "Members visible in their organizations" on public.organization_members for select using (public.is_admin() or public.is_org_member(organization_id));
-create policy "Admins manage members" on public.organization_members for all using (public.is_admin()) with check (public.is_admin());
-
-create policy "Products visible to org members or admins" on public.products for select using (public.is_admin() or public.is_org_member(organization_id));
-create policy "Members create products in own org" on public.products for insert with check (public.is_admin() or public.is_org_member(organization_id));
-create policy "Members update products in own org" on public.products for update using (public.is_admin() or public.is_org_member(organization_id));
-create policy "Admins delete products" on public.products for delete using (public.is_admin());
-
-create policy "Product children visible through product access" on public.product_variants for select using (exists (select 1 from public.products p where p.id = product_id and (public.is_admin() or public.is_org_member(p.organization_id))));
-create policy "Product children insert through product access" on public.product_variants for insert with check (exists (select 1 from public.products p where p.id = product_id and (public.is_admin() or public.is_org_member(p.organization_id))));
-create policy "Product children update through product access" on public.product_variants for update using (exists (select 1 from public.products p where p.id = product_id and (public.is_admin() or public.is_org_member(p.organization_id))));
-create policy "Product children delete through product access" on public.product_variants for delete using (exists (select 1 from public.products p where p.id = product_id and (public.is_admin() or public.is_org_member(p.organization_id))));
-
-create policy "Images visible through product access" on public.product_images for all using (exists (select 1 from public.products p where p.id = product_id and (public.is_admin() or public.is_org_member(p.organization_id)))) with check (exists (select 1 from public.products p where p.id = product_id and (public.is_admin() or public.is_org_member(p.organization_id))));
-create policy "Tags visible through product access" on public.product_tags for all using (exists (select 1 from public.products p where p.id = product_id and (public.is_admin() or public.is_org_member(p.organization_id)))) with check (exists (select 1 from public.products p where p.id = product_id and (public.is_admin() or public.is_org_member(p.organization_id))));
-create policy "Metafields visible through product access" on public.product_metafields for all using (exists (select 1 from public.products p where p.id = product_id and (public.is_admin() or public.is_org_member(p.organization_id)))) with check (exists (select 1 from public.products p where p.id = product_id and (public.is_admin() or public.is_org_member(p.organization_id))));
-create policy "Reviews visible through product access" on public.product_reviews for select using (exists (select 1 from public.products p where p.id = product_id and (public.is_admin() or public.is_org_member(p.organization_id))));
-create policy "Admins create reviews" on public.product_reviews for insert with check (public.is_admin());
-
-create policy "Templates visible to org members or admins" on public.product_templates for select using (public.is_admin() or organization_id is null or public.is_org_member(organization_id));
-create policy "Admins manage templates" on public.product_templates for all using (public.is_admin()) with check (public.is_admin());
-create policy "Template fields visible through templates" on public.template_fields for select using (exists (select 1 from public.product_templates t where t.id = template_id and (public.is_admin() or t.organization_id is null or public.is_org_member(t.organization_id))));
-create policy "Admins manage template fields" on public.template_fields for all using (public.is_admin()) with check (public.is_admin());
-
+create index products_status_idx on public.products(status);
 create index product_variants_product_id_idx on public.product_variants(product_id);
+create index product_colorways_product_id_idx on public.product_colorways(product_id);
 create index product_images_product_id_idx on public.product_images(product_id);
-create index products_organization_status_idx on public.products(organization_id, status);
+create index drops_release_date_idx on public.drops(release_date);
+
+insert into public.templates (name, description)
+values ('REP ACTIVEWEAR', 'Standard REP.MOVEMENT activewear product intake')
+on conflict (name) do nothing;
+
+insert into public.template_fields (template_id, field_name, field_label, field_type, required, position)
+select id, fields.field_name, fields.field_label, 'text', true, fields.position
+from public.templates
+cross join (values
+  ('fabric', 'Fabric', 1),
+  ('composition', 'Composition', 2),
+  ('fit', 'Fit', 3),
+  ('compression', 'Compression', 4),
+  ('stretch', 'Stretch', 5),
+  ('support', 'Support', 6),
+  ('rise', 'Rise', 7),
+  ('length', 'Length', 8),
+  ('activity', 'Activity', 9),
+  ('model_height', 'Model height', 10),
+  ('model_size', 'Model size', 11),
+  ('care_instructions', 'Care instructions', 12),
+  ('country_of_origin', 'Country of origin', 13)
+) as fields(field_name, field_label, position)
+where public.templates.name = 'REP ACTIVEWEAR'
+  and not exists (
+    select 1
+    from public.template_fields existing
+    where existing.template_id = public.templates.id
+      and existing.field_name = fields.field_name
+  );

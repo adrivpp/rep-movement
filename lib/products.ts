@@ -67,7 +67,7 @@ export async function getProductForEdit(
   const { data, error } = await supabase
     .from("products")
     .select(
-      "id,title,handle,vendor,product_type,description,short_description,seo_title,seo_description,product_variants(id,sku,price,compare_at_price,cost,stock,weight,barcode,color,size),product_images(id,url,alt_text,position),product_tags(tag),product_metafields(namespace,key,value,type)",
+      "id,title,handle,vendor,product_type,description,short_description,seo_title,seo_description,product_specs(fabric,composition,fit,compression,stretch,support,rise,length,activity,model_height,model_size,care_instructions,country_of_origin),product_colorways(color_name_snapshot,status,is_permanent,is_limited,preorder_enabled,preorder_start,preorder_end,preorder_shipping_estimate,preorder_message),product_variants(id,sku,price,compare_at_price,cost,stock,weight,barcode,color,size),product_images(id,url,alt_text,position),product_tags(tag),product_metafields(namespace,key,value,type)",
     )
     .eq("id", id)
     .single();
@@ -77,6 +77,7 @@ export async function getProductForEdit(
   }
 
   const variants = data.product_variants ?? [];
+  const specs = data.product_specs?.[0];
   const colors = Array.from(
     new Set(variants.map((variant) => variant.color).filter(Boolean)),
   );
@@ -95,6 +96,36 @@ export async function getProductForEdit(
       description: data.description ?? "",
       seoTitle: data.seo_title ?? "",
       seoDescription: data.seo_description ?? "",
+      specs: {
+        fabric: specs?.fabric ?? "",
+        composition: specs?.composition ?? "",
+        fit: specs?.fit ?? "",
+        compression: specs?.compression ?? "",
+        stretch: specs?.stretch ?? "",
+        support: specs?.support ?? "",
+        rise: specs?.rise ?? "",
+        length: specs?.length ?? "",
+        activity: specs?.activity ?? "",
+        modelHeight: specs?.model_height ?? "",
+        modelSize: specs?.model_size ?? "",
+        careInstructions: specs?.care_instructions ?? "",
+        countryOfOrigin: specs?.country_of_origin ?? "",
+      },
+      colorwayDetails: Object.fromEntries(
+        (data.product_colorways ?? []).map((colorway) => [
+          colorway.color_name_snapshot,
+          {
+            status: colorway.status,
+            isPermanent: colorway.is_permanent,
+            isLimited: colorway.is_limited,
+            preorderEnabled: colorway.preorder_enabled,
+            preorderStart: colorway.preorder_start ?? "",
+            preorderEnd: colorway.preorder_end ?? "",
+            preorderShippingEstimate: colorway.preorder_shipping_estimate ?? "",
+            preorderMessage: colorway.preorder_message ?? "",
+          },
+        ]),
+      ),
       colors,
       sizes,
       skuPrefix: variants[0]?.sku?.split("-").slice(0, -2).join("-") ?? "",

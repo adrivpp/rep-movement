@@ -2,35 +2,58 @@
 
 import { ChangeEvent, useMemo, useState, useTransition } from "react";
 import Image from "next/image";
-import {
-  ArrowRight,
-  Check,
-  Download,
-  GripVertical,
-  ImagePlus,
-  Plus,
-  Trash2,
-} from "lucide-react";
+import { ArrowRight, Check, Download, ImagePlus, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { saveProductDraft } from "@/app/(app)/products/actions";
 import {
   blankProductState,
-  generateVariants,
   type ProductBuilderInitialData,
+  type ColorwayDetails,
   type ProductFormState,
   type ProductImage,
+  type ProductSpecs,
   type Variant,
 } from "@/lib/product-builder-data";
+import { mergeVariants } from "@/lib/product-builder-data";
+import { getProductCompletion } from "@/lib/product-completion";
 import { cn, makeHandle, normalizeSku } from "@/lib/utils";
 
 const steps = [
   "BASICS",
   "VARIANTS",
   "INVENTORY",
+  "DETAILS",
   //  "IMAGES",
   "SEO",
   "REVIEW",
 ];
+
+const specFields: Array<[keyof ProductSpecs, string]> = [
+  ["fabric", "FABRIC"],
+  ["composition", "COMPOSITION"],
+  ["fit", "FIT"],
+  ["compression", "COMPRESSION"],
+  ["stretch", "STRETCH"],
+  ["support", "SUPPORT"],
+  ["rise", "RISE"],
+  ["length", "LENGTH"],
+  ["activity", "ACTIVITY"],
+  ["modelHeight", "MODEL HEIGHT"],
+  ["modelSize", "MODEL SIZE"],
+  ["careInstructions", "CARE INSTRUCTIONS"],
+  ["countryOfOrigin", "COUNTRY OF ORIGIN"],
+];
+
+const defaultColorwayDetails = {
+  status: "available" as const,
+  isPermanent: true,
+  isLimited: false,
+  preorderEnabled: false,
+  preorderStart: "",
+  preorderEnd: "",
+  preorderShippingEstimate: "",
+  preorderMessage: "",
+};
 
 export function ProductBuilder({
   initialData,
@@ -54,37 +77,18 @@ export function ProductBuilder({
   const [newSize, setNewSize] = useState("");
   const [newTag, setNewTag] = useState("");
   const [saved, setSaved] = useState("Saved locally");
+  const completionResult = useMemo(
+    () =>
+      getProductCompletion({
+        ...product,
+        variants,
+      }),
+    [product, variants],
+  );
   const hasRequiredTitle = product.title.trim().length > 0;
+  const isReadyToSubmit = completionResult.missing.length === 0;
 
-  const completion = useMemo(() => {
-    const checks = [
-      product.title,
-      product.vendor,
-      product.productType,
-      product.handle,
-      product.shortDescription,
-      product.description,
-      product.seoTitle,
-      product.seoDescription,
-      product.colors.length,
-      product.sizes.length,
-      variants.length,
-      variants.length > 0 &&
-        variants.every((variant) => Number(variant.price) > 0),
-      variants.length > 0 &&
-        variants.every(
-          (variant) =>
-            variant.stock !== "" &&
-            Number.isInteger(Number(variant.stock)) &&
-            Number(variant.stock) >= 0,
-        ),
-      images.length,
-      product.tags.length,
-      product.metafields.length,
-    ];
-
-    return Math.round((checks.filter(Boolean).length / checks.length) * 100);
-  }, [images.length, product, variants]);
+  const completion = completionResult.percentage;
 
   const primaryImage = images[0]?.url ?? null;
   const pageLabel =
@@ -112,17 +116,40 @@ export function ProductBuilder({
 
   function addColor() {
     if (!newColor.trim()) return;
-    const colors = [...product.colors, newColor.trim()];
-    setProduct((current) => ({ ...current, colors }));
-    setVariants(generateVariants(colors, product.sizes, product.skuPrefix));
+    const color = newColor.trim();
+    if (
+      product.colors.some(
+        (value) => value.toLowerCase() === color.toLowerCase(),
+      )
+    )
+      return;
+    const colors = [...product.colors, color];
+    setProduct((current) => ({
+      ...current,
+      colors,
+      colorwayDetails: {
+        ...current.colorwayDetails,
+        [color]: { ...defaultColorwayDetails },
+      },
+    }));
+    setVariants((current) =>
+      mergeVariants(current, colors, product.sizes, product.skuPrefix),
+    );
     setNewColor("");
   }
 
   function addSize() {
     if (!newSize.trim()) return;
-    const sizes = [...product.sizes, newSize.trim().toUpperCase()];
+    const size = newSize.trim().toUpperCase();
+    if (
+      product.sizes.some((value) => value.toLowerCase() === size.toLowerCase())
+    )
+      return;
+    const sizes = [...product.sizes, size];
     setProduct((current) => ({ ...current, sizes }));
-    setVariants(generateVariants(product.colors, sizes, product.skuPrefix));
+    setVariants((current) =>
+      mergeVariants(current, product.colors, sizes, product.skuPrefix),
+    );
     setNewSize("");
   }
 
@@ -176,12 +203,10 @@ export function ProductBuilder({
         "Variant Compare At Price",
         "Variant Inventory Qty",
         "Variant Grams",
-        "Image Src",
-        "Image Alt Text",
         "SEO Title",
         "SEO Description",
       ],
-      ...variants.map((variant, index) => [
+      ...variants.map((variant) => [
         product.handle,
         product.title,
         product.description,
@@ -197,8 +222,6 @@ export function ProductBuilder({
         variant.compareAtPrice,
         variant.stock,
         String(Math.round(Number(variant.weight || 0) * 1000)),
-        index === 0 ? (images[0]?.url ?? "") : "",
-        index === 0 ? (images[0]?.alt ?? product.title) : "",
         product.seoTitle,
         product.seoDescription,
       ]),
@@ -217,6 +240,92 @@ export function ProductBuilder({
     anchor.download = `${product.handle || "product"}-shopify.csv`;
     anchor.click();
     URL.revokeObjectURL(url);
+  }
+
+  function downloadExport(filename: string, content: string, type: string) {
+    const url = URL.createObjectURL(new Blob([content], { type }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportProductMaster() {
+    const headers = [
+      "Handle",
+      "Title",
+      "Vendor",
+      "Type",
+      "Fabric",
+      "Composition",
+      "Fit",
+      "Compression",
+      "Stretch",
+      "Support",
+      "Rise",
+      "Length",
+      "Activity",
+      "Model Height",
+      "Model Size",
+      "Care Instructions",
+      "Country Of Origin",
+      "SKU",
+      "Color",
+      "Size",
+      "Price",
+      "Compare At Price",
+      "Cost",
+      "Stock",
+      "Weight",
+      "Barcode",
+    ];
+    const rows = variants.map((variant) => [
+      product.handle,
+      product.title,
+      product.vendor,
+      product.productType,
+      product.specs.fabric,
+      product.specs.composition,
+      product.specs.fit,
+      product.specs.compression,
+      product.specs.stretch,
+      product.specs.support,
+      product.specs.rise,
+      product.specs.length,
+      product.specs.activity,
+      product.specs.modelHeight,
+      product.specs.modelSize,
+      product.specs.careInstructions,
+      product.specs.countryOfOrigin,
+      variant.sku,
+      variant.color,
+      variant.size,
+      variant.price,
+      variant.compareAtPrice,
+      variant.cost,
+      variant.stock,
+      variant.weight,
+      variant.barcode,
+    ]);
+    const csv = [headers, ...rows]
+      .map((row) =>
+        row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(","),
+      )
+      .join("\n");
+    downloadExport(
+      `${product.handle || "product"}-master.csv`,
+      csv,
+      "text/csv;charset=utf-8",
+    );
+  }
+
+  function exportJson() {
+    downloadExport(
+      `${product.handle || "product"}.json`,
+      JSON.stringify({ product, variants }, null, 2),
+      "application/json;charset=utf-8",
+    );
   }
 
   function persistProduct(status: "in_progress" | "submitted" = "in_progress") {
@@ -324,6 +433,24 @@ export function ProductBuilder({
                 inputValue={newColor}
                 setInputValue={setNewColor}
                 onAdd={addColor}
+                onRemove={(value) => {
+                  const colors = product.colors.filter(
+                    (color) => color !== value,
+                  );
+                  setProduct((current) => {
+                    const colorwayDetails = { ...current.colorwayDetails };
+                    delete colorwayDetails[value];
+                    return { ...current, colors, colorwayDetails };
+                  });
+                  setVariants((current) =>
+                    mergeVariants(
+                      current,
+                      colors,
+                      product.sizes,
+                      product.skuPrefix,
+                    ),
+                  );
+                }}
               />
               <ChipEditor
                 label="SIZES"
@@ -331,7 +458,123 @@ export function ProductBuilder({
                 inputValue={newSize}
                 setInputValue={setNewSize}
                 onAdd={addSize}
+                onRemove={(value) => {
+                  const sizes = product.sizes.filter((size) => size !== value);
+                  setProduct((current) => ({ ...current, sizes }));
+                  setVariants((current) =>
+                    mergeVariants(
+                      current,
+                      product.colors,
+                      sizes,
+                      product.skuPrefix,
+                    ),
+                  );
+                }}
               />
+              <div className="space-y-6 border-t border-[#ded6ca] pt-8">
+                <p className="micro-label">COLORWAY AVAILABILITY</p>
+                {product.colors.map((color) => {
+                  const details =
+                    product.colorwayDetails[color] ?? defaultColorwayDetails;
+                  const updateColorway = (changes: Partial<ColorwayDetails>) =>
+                    setProduct((current) => ({
+                      ...current,
+                      colorwayDetails: {
+                        ...current.colorwayDetails,
+                        [color]: { ...details, ...changes },
+                      },
+                    }));
+
+                  return (
+                    <div key={color} className="soft-card space-y-4 p-5">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-lg font-medium">{color}</p>
+                        <select
+                          className="field max-w-52"
+                          value={details.status}
+                          onChange={(event) =>
+                            updateColorway({
+                              status: event.target
+                                .value as typeof details.status,
+                            })
+                          }
+                          aria-label={`${color} status`}
+                        >
+                          <option value="coming_soon">Coming Soon</option>
+                          <option value="available">Available</option>
+                          <option value="low_stock">Low Stock</option>
+                          <option value="sold_out">Sold Out</option>
+                          <option value="preorder">Preorder</option>
+                          <option value="restocked">Restocked</option>
+                          <option value="archived">Archived</option>
+                        </select>
+                      </div>
+                      <div className="flex flex-wrap gap-5 text-sm">
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={details.isPermanent}
+                            onChange={(event) =>
+                              updateColorway({
+                                isPermanent: event.target.checked,
+                              })
+                            }
+                          />{" "}
+                          Permanent
+                        </label>
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={details.isLimited}
+                            onChange={(event) =>
+                              updateColorway({
+                                isLimited: event.target.checked,
+                              })
+                            }
+                          />{" "}
+                          Limited
+                        </label>
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={details.preorderEnabled}
+                            onChange={(event) =>
+                              updateColorway({
+                                preorderEnabled: event.target.checked,
+                                status: event.target.checked
+                                  ? "preorder"
+                                  : details.status,
+                              })
+                            }
+                          />{" "}
+                          Preorder
+                        </label>
+                      </div>
+                      {details.preorderEnabled && (
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <TextField
+                            label="PREORDER SHIPPING ESTIMATE"
+                            value={details.preorderShippingEstimate}
+                            onChange={(value) =>
+                              updateColorway({
+                                preorderShippingEstimate: value,
+                              })
+                            }
+                          />
+                          <TextArea
+                            label="PREORDER MESSAGE"
+                            value={details.preorderMessage}
+                            rows={2}
+                            onChange={(value) =>
+                              updateColorway({ preorderMessage: value })
+                            }
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
               <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
                 <TextField
                   label="SKU PREFIX"
@@ -458,6 +701,44 @@ export function ProductBuilder({
           )} */}
 
           {step === 3 && (
+            <BuilderSection title="Product Details">
+              <p className="max-w-2xl text-sm leading-6 text-[#746d64]">
+                Tell us what makes this piece feel and perform the way it does.
+                These details prepare the product for the REP.MOVEMENT catalog.
+              </p>
+              <div className="grid gap-8 md:grid-cols-2">
+                {specFields.map(([field, label]) =>
+                  field === "careInstructions" ? (
+                    <TextArea
+                      key={field}
+                      label={label}
+                      value={product.specs[field]}
+                      onChange={(value) =>
+                        setProduct((current) => ({
+                          ...current,
+                          specs: { ...current.specs, [field]: value },
+                        }))
+                      }
+                    />
+                  ) : (
+                    <TextField
+                      key={field}
+                      label={label}
+                      value={product.specs[field]}
+                      onChange={(value) =>
+                        setProduct((current) => ({
+                          ...current,
+                          specs: { ...current.specs, [field]: value },
+                        }))
+                      }
+                    />
+                  ),
+                )}
+              </div>
+            </BuilderSection>
+          )}
+
+          {step === 4 && (
             <BuilderSection title="SEO">
               <TextField
                 label={`SEO TITLE ${product.seoTitle.length}/70`}
@@ -486,8 +767,21 @@ export function ProductBuilder({
             </BuilderSection>
           )}
 
-          {step === 4 && (
+          {step === 5 && (
             <BuilderSection title="Review & Submit">
+              {completionResult.missing.length > 0 && (
+                <div className="soft-card border-[#b58b65] p-6">
+                  <p className="micro-label">STILL NEEDED</p>
+                  <ul className="mt-4 space-y-2 text-sm text-[#62594f]">
+                    {completionResult.missing.map((item) => (
+                      <li key={item} className="flex items-center gap-2">
+                        <span className="text-[#9b5f31]">!</span>
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <ChipEditor
                 label="TAGS"
                 values={product.tags}
@@ -495,12 +789,25 @@ export function ProductBuilder({
                 setInputValue={setNewTag}
                 onAdd={() => {
                   if (!newTag.trim()) return;
+                  if (
+                    product.tags.some(
+                      (tag) =>
+                        tag.toLowerCase() === newTag.trim().toLowerCase(),
+                    )
+                  )
+                    return;
                   setProduct((current) => ({
                     ...current,
                     tags: [...current.tags, newTag.trim()],
                   }));
                   setNewTag("");
                 }}
+                onRemove={(value) =>
+                  setProduct((current) => ({
+                    ...current,
+                    tags: current.tags.filter((tag) => tag !== value),
+                  }))
+                }
               />
               <div className="space-y-5">
                 <p className="micro-label">METAFIELDS</p>
@@ -556,13 +863,23 @@ export function ProductBuilder({
                   <Plus className="h-4 w-4" /> ADD METAFIELD
                 </Button>
               </div>
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <Button type="button" variant="secondary" onClick={exportCsv}>
                   <Download className="h-4 w-4" /> EXPORT SHOPIFY CSV
                 </Button>
                 <Button
                   type="button"
-                  disabled={isPending || !hasRequiredTitle}
+                  variant="secondary"
+                  onClick={exportProductMaster}
+                >
+                  <Download className="h-4 w-4" /> EXPORT MASTER CSV
+                </Button>
+                <Button type="button" variant="secondary" onClick={exportJson}>
+                  <Download className="h-4 w-4" /> EXPORT JSON
+                </Button>
+                <Button
+                  type="button"
+                  disabled={isPending || !isReadyToSubmit}
                   onClick={() => persistProduct("submitted")}
                 >
                   SUBMIT FOR REVIEW <Check className="h-4 w-4" />
@@ -703,12 +1020,14 @@ function ChipEditor({
   inputValue,
   setInputValue,
   onAdd,
+  onRemove,
 }: {
   label: string;
   values: string[];
   inputValue: string;
   setInputValue: (value: string) => void;
   onAdd: () => void;
+  onRemove?: (value: string) => void;
 }) {
   return (
     <div>
@@ -717,9 +1036,19 @@ function ChipEditor({
         {values.map((value) => (
           <span
             key={value}
-            className="rounded-full border border-[#d8d0c5] px-4 py-2 text-sm"
+            className="inline-flex items-center gap-2 rounded-full border border-[#d8d0c5] px-4 py-2 text-sm"
           >
             {value}
+            {onRemove && (
+              <button
+                type="button"
+                onClick={() => onRemove(value)}
+                aria-label={`Remove ${value}`}
+                className="text-[#746d64] transition hover:text-[#241f1a]"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
           </span>
         ))}
         <input

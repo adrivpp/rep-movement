@@ -1,9 +1,20 @@
 import Link from "next/link";
-import { LogOut, Package, PanelsTopLeft, Settings } from "lucide-react";
+import {
+  CalendarDays,
+  ClipboardCheck,
+  FileText,
+  LogOut,
+  Package,
+  PanelsTopLeft,
+  Settings,
+} from "lucide-react";
 
 const nav = [
   { label: "HOME", href: "/dashboard", icon: PanelsTopLeft },
   { label: "PRODUCTS", href: "/products", icon: Package },
+  { label: "DROPS", href: "/drops", icon: CalendarDays },
+  { label: "REVIEWS", href: "/reviews", icon: ClipboardCheck },
+  { label: "TEMPLATES", href: "/templates", icon: FileText },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
